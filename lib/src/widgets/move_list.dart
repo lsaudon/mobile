@@ -5,39 +5,30 @@ import 'package:lichess_mobile/src/model/account/account_preferences.dart';
 import 'package:lichess_mobile/src/styles/styles.dart';
 import 'package:lichess_mobile/src/utils/rate_limit.dart';
 
-const _scrollAnimationDuration = Duration(milliseconds: 200);
-const _moveListOpacity = 0.8;
-
+const _kScrollAnimationDuration = Duration(milliseconds: 200);
+const _kMoveListOpacity = 0.8;
 const _kMoveListHeight = 40.0;
 
 enum MoveListType { inline, stacked }
 
-class MoveList extends ConsumerStatefulWidget {
+class MoveList extends StatefulWidget {
   const MoveList({
     required this.type,
     required this.slicedMoves,
     required this.currentMoveIndex,
-    this.inlineColor,
-    this.inlineDecoration,
     this.onSelectMove,
   });
 
   final MoveListType type;
-
-  final Color? inlineColor;
-
-  final BoxDecoration? inlineDecoration;
-
   final Iterable<List<MapEntry<int, String>>> slicedMoves;
-
   final int currentMoveIndex;
   final void Function(int moveIndex)? onSelectMove;
 
   @override
-  ConsumerState<MoveList> createState() => _MoveListState();
+  State<MoveList> createState() => _MoveListState();
 }
 
-class _MoveListState extends ConsumerState<MoveList> {
+class _MoveListState extends State<MoveList> {
   final currentMoveKey = GlobalKey();
   final _debounce = Debouncer(const Duration(milliseconds: 100));
 
@@ -65,7 +56,7 @@ class _MoveListState extends ConsumerState<MoveList> {
         Scrollable.ensureVisible(
           currentMoveKey.currentContext!,
           alignment: 0.5,
-          duration: _scrollAnimationDuration,
+          duration: _kScrollAnimationDuration,
           curve: Curves.easeIn,
         );
       }
@@ -74,108 +65,93 @@ class _MoveListState extends ConsumerState<MoveList> {
 
   @override
   Widget build(BuildContext context) {
+    return switch (widget.type) {
+      MoveListType.inline => _InlineMoves(
+        slicedMoves: widget.slicedMoves,
+        currentMoveKey: currentMoveKey,
+        currentMoveIndex: widget.currentMoveIndex,
+        onSelectMove: widget.onSelectMove,
+      ),
+      MoveListType.stacked => _StackedMoves(
+        slicedMoves: widget.slicedMoves,
+        currentMoveKey: currentMoveKey,
+        currentMoveIndex: widget.currentMoveIndex,
+        onSelectMove: widget.onSelectMove,
+      ),
+    };
+  }
+}
+
+class _InlineMoves extends ConsumerWidget {
+  const _InlineMoves({
+    required this.slicedMoves,
+    required this.currentMoveKey,
+    required this.currentMoveIndex,
+    required this.onSelectMove,
+  });
+
+  final Iterable<List<MapEntry<int, String>>> slicedMoves;
+  final GlobalKey<State<StatefulWidget>> currentMoveKey;
+  final int currentMoveIndex;
+  final void Function(int moveIndex)? onSelectMove;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final pieceNotation = ref
         .watch(pieceNotationProvider)
         .maybeWhen(data: (value) => value, orElse: () => defaultAccountPreferences.pieceNotation);
 
-    return widget.type == MoveListType.inline
-        ? Container(
-            decoration: widget.inlineDecoration,
-            height: _kMoveListHeight,
-            width: double.infinity,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(left: 5),
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                spacing: 10,
-                children: widget.slicedMoves
-                    .mapIndexed(
-                      (index, moves) => Row(
-                        children: [
-                          InlineMoveCount(
-                            pieceNotation: pieceNotation,
-                            count: index + 1,
-                            color: widget.inlineColor,
-                          ),
-                          ...moves.map((move) {
-                            // cursor index starts at 0, move index starts at 1
-                            final isCurrentMove = widget.currentMoveIndex == move.key + 1;
-                            return InlineMoveItem(
-                              key: isCurrentMove ? currentMoveKey : null,
-                              move: move,
-                              color: widget.inlineColor,
-                              pieceNotation: pieceNotation,
-                              current: isCurrentMove,
-                              onSelectMove: widget.onSelectMove,
-                            );
-                          }),
-                        ],
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-            ),
-          )
-        : Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SingleChildScrollView(
-                child: Column(
-                  children: widget.slicedMoves
-                      .mapIndexed(
-                        (index, moves) => Row(
-                          mainAxisSize: MainAxisSize.max,
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            StackedMoveCount(count: index + 1),
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  ...moves.map((move) {
-                                    // cursor index starts at 0, move index starts at 1
-                                    final isCurrentMove = widget.currentMoveIndex == move.key + 1;
-                                    return Expanded(
-                                      child: StackedMoveItem(
-                                        key: isCurrentMove ? currentMoveKey : null,
-                                        move: move,
-                                        current: isCurrentMove,
-                                        onSelectMove: widget.onSelectMove,
-                                      ),
-                                    );
-                                  }),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                      .toList(growable: false),
+    return SizedBox(
+      height: _kMoveListHeight,
+      width: double.infinity,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(left: 5),
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          spacing: 10,
+          children: slicedMoves
+              .mapIndexed(
+                (index, moves) => Row(
+                  children: [
+                    _InlineMoveCount(pieceNotation: pieceNotation, count: index + 1),
+                    ...moves.map((move) {
+                      // cursor index starts at 0, move index starts at 1
+                      final isCurrentMove = currentMoveIndex == move.key + 1;
+                      return InlineMoveItem(
+                        key: isCurrentMove ? currentMoveKey : null,
+                        move: move,
+                        pieceNotation: pieceNotation,
+                        current: isCurrentMove,
+                        onSelectMove: onSelectMove,
+                      );
+                    }),
+                  ],
                 ),
-              ),
-            ),
-          );
+              )
+              .toList(growable: false),
+        ),
+      ),
+    );
   }
 }
 
-class InlineMoveCount extends StatelessWidget {
-  const InlineMoveCount({required this.count, required this.pieceNotation, this.color});
+class _InlineMoveCount extends StatelessWidget {
+  const _InlineMoveCount({required this.count, required this.pieceNotation});
 
   final PieceNotation pieceNotation;
   final int count;
 
-  final Color? color;
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 3),
-      child: Text(
-        '$count.',
-        style: TextStyle(
-          fontWeight: FontWeight.w500,
-          color: color?.withValues(alpha: _moveListOpacity) ?? textShade(context, _moveListOpacity),
-          fontFamily: pieceNotation == PieceNotation.symbol ? 'ChessFont' : null,
-        ),
+    return Text(
+      '$count.',
+      style: TextStyle(
+        fontWeight: FontWeight.w500,
+        color: textShade(context, _kMoveListOpacity),
+        fontFamily: switch (pieceNotation) {
+          PieceNotation.symbol => 'ChessFont',
+          PieceNotation.letter => null,
+        },
       ),
     );
   }
@@ -185,35 +161,31 @@ class InlineMoveItem extends StatelessWidget {
   const InlineMoveItem({
     required this.move,
     required this.pieceNotation,
-    this.color,
-    this.current,
+    required this.current,
     this.onSelectMove,
     super.key,
   });
 
-  final Color? color;
-
   final MapEntry<int, String> move;
   final PieceNotation pieceNotation;
-  final bool? current;
+  final bool current;
   final void Function(int moveIndex)? onSelectMove;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onSelectMove != null ? () => onSelectMove!(move.key + 1) : null,
-      child: Container(
+      child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 4),
         child: Text(
           move.value,
           style: TextStyle(
-            fontFamily: pieceNotation == PieceNotation.symbol ? 'ChessFont' : null,
-            fontWeight: current == true ? FontWeight.bold : FontWeight.w500,
-            color: current != true
-                ? color != null
-                      ? color!.withValues(alpha: _moveListOpacity)
-                      : textShade(context, _moveListOpacity)
-                : ColorScheme.of(context).primary,
+            fontWeight: current ? FontWeight.bold : FontWeight.w500,
+            color: current ? ColorScheme.of(context).primary : textShade(context, _kMoveListOpacity),
+            fontFamily: switch (pieceNotation) {
+              PieceNotation.symbol => 'ChessFont',
+              PieceNotation.letter => null,
+            },
           ),
         ),
       ),
@@ -221,8 +193,62 @@ class InlineMoveItem extends StatelessWidget {
   }
 }
 
-class StackedMoveCount extends StatelessWidget {
-  const StackedMoveCount({required this.count});
+class _StackedMoves extends StatelessWidget {
+  const _StackedMoves({
+    required this.slicedMoves,
+    required this.currentMoveKey,
+    required this.currentMoveIndex,
+    required this.onSelectMove,
+  });
+
+  final Iterable<List<MapEntry<int, String>>> slicedMoves;
+  final GlobalKey<State<StatefulWidget>> currentMoveKey;
+  final int currentMoveIndex;
+  final void Function(int moveIndex)? onSelectMove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: slicedMoves
+              .mapIndexed(
+                (index, moves) => Row(
+                  mainAxisSize: MainAxisSize.max,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    _StackedMoveCount(count: index + 1),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          ...moves.map((move) {
+                            // cursor index starts at 0, move index starts at 1
+                            final isCurrentMove = currentMoveIndex == move.key + 1;
+                            return Expanded(
+                              child: _StackedMoveItem(
+                                key: isCurrentMove ? currentMoveKey : null,
+                                move: move,
+                                current: isCurrentMove,
+                                onSelectMove: onSelectMove,
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ),
+    );
+  }
+}
+
+class _StackedMoveCount extends StatelessWidget {
+  const _StackedMoveCount({required this.count});
 
   final int count;
 
@@ -232,30 +258,30 @@ class StackedMoveCount extends StatelessWidget {
       width: 40.0,
       child: Text(
         '$count.',
-        style: TextStyle(fontWeight: FontWeight.w600, color: textShade(context, _moveListOpacity)),
+        style: TextStyle(fontWeight: FontWeight.w600, color: textShade(context, _kMoveListOpacity)),
       ),
     );
   }
 }
 
-class StackedMoveItem extends StatelessWidget {
-  const StackedMoveItem({required this.move, this.current, this.onSelectMove, super.key});
+class _StackedMoveItem extends StatelessWidget {
+  const _StackedMoveItem({required this.move, required this.current, this.onSelectMove, super.key});
 
   final MapEntry<int, String> move;
-  final bool? current;
+  final bool current;
   final void Function(int moveIndex)? onSelectMove;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onSelectMove != null ? () => onSelectMove!(move.key + 1) : null,
-      child: Container(
+      child: Padding(
         padding: const EdgeInsets.all(8),
         child: Text(
           move.value,
           style: TextStyle(
-            fontWeight: current == true ? FontWeight.bold : null,
-            color: current != true ? textShade(context, 0.8) : null,
+            fontWeight: current ? FontWeight.bold : null,
+            color: current ? null : textShade(context, _kMoveListOpacity),
           ),
         ),
       ),
